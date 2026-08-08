@@ -1,26 +1,20 @@
 {
-  "name": "abbahgamji-backend",
+  "name": "abbahgamji-frontend",
   "version": "1.0.0",
-  "description": "Backend API for ABBAHGAMJI e-commerce site — products, orders, accounts, and Flutterwave payment verification.",
-  "main": "server.js",
-  "type": "commonjs",
+  "private": true,
+  "description": "Storefront + admin dashboard for ABBAHGAMJI — talks to the existing abbahgamji-backend Express API.",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "express-rate-limit": "^7.4.0",
-    "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "lowdb": "^1.0.0",
-    "nodemailer": "^6.9.14",
-    "uuid": "^9.0.1"
+    "next": "14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.17.0"
   }
 }

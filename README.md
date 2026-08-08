@@ -1,128 +1,108 @@
-# ABBAHGAMJI — Full Site (Frontend + Backend, One Project)
+# ABBAHGAMJI — Frontend
 
-This is the whole ABBAHGAMJI site: the storefront, the admin dashboard, and
-the API that powers both, running as a single Node/Express app. Storefront
-and API share one origin, so there's no separate URL to configure and no
-CORS to think about.
+Next.js 14 (App Router) storefront + admin dashboard for ABBAHGAMJI. This is a
+**separate project** from the `abbahgamji-backend` Express API — it talks to
+that backend over HTTP and holds no database of its own.
 
-```
-backend/
-  public/
-    index.html     ← storefront (served at  /)
-    admin.html     ← admin dashboard (served at  /admin.html)
-    robots.txt
-    sitemap.xml
-  routes/           ← API route handlers
-  server.js         ← serves public/ AND the /api/* routes
-  db.js             ← file-based database (lowdb)
-  .env.example
-```
+> **Note on Supabase:** the backend in this project's companion zip does not
+> use Supabase — it's a plain Express API with JWT auth, a local JSON-file
+> database, and Flutterwave for payments. This frontend is built to match
+> that, not Supabase. If you want Supabase later, that's a backend change,
+> not a frontend one.
 
-## What this replaces
+## What's included
 
-Originally the site was static HTML that kept products, orders, and accounts
-in browser memory — they vanished on refresh. This project stores them in a
-file (`db.json`, via lowdb) so they persist between visits, and moves the two
-things that must never live in a browser — password checking and payment
-verification — onto the server.
+- Storefront: home, shop with category filters, product detail with
+  made-to-measure "tailor's inscription" measurements, cart, checkout
+  (Flutterwave inline payment), order confirmation, order tracking by ID or
+  phone, customer login (password or magic link), registration, and an
+  account page for saved measurements and loyalty points.
+- Admin dashboard at `/admin`: analytics overview, products CRUD, orders with
+  status updates and CSV export, coupons, review moderation, and a customer
+  list. Access is gated by the same `ADMIN_TOKEN` value the backend's
+  `requireAdmin` middleware checks — there's no separate admin login system
+  on the backend, so the dashboard just asks for that token once and stores
+  it locally.
+- Plain CSS (no Tailwind/UI framework) styled to match the existing brand:
+  Oxford Blue, gold, ivory, Playfair Display + Inter.
 
-## 1. Install
+## Setup
 
 ```bash
-cd backend
 npm install
+cp .env.example .env.local
+# edit .env.local — see below
+npm run dev
 ```
 
-## 2. Configure
+Open http://localhost:3000. Make sure the backend is running (see its own
+README) at the URL you set in `NEXT_PUBLIC_API_URL`.
 
-```bash
-cp .env.example .env
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | Base URL of the backend API, no trailing slash. |
+| `NEXT_PUBLIC_FLW_PUBLIC_KEY` | Flutterwave **public** key. The secret key stays in the backend's `.env` only. |
+
+Both are `NEXT_PUBLIC_*` because they're needed in the browser — neither is a
+secret that grants write access.
+
+## How admin access works
+
+The backend has no per-admin accounts — every `requireAdmin` route just
+checks a bearer token against a single `ADMIN_TOKEN` value in the backend's
+`.env`. Visiting `/admin` on this frontend asks for that same token once,
+verifies it against a real admin endpoint, and stores it in
+`localStorage` for next time. Anyone with that token has full admin access,
+so treat it like a password and don't commit it.
+
+## Deploying to Vercel
+
+1. Push this project to its own Git repo (keep it separate from the
+   backend repo, or put it in a subdirectory and set that as the Vercel
+   project's root).
+2. Import the repo in Vercel, framework preset **Next.js**.
+3. Add the two environment variables above in Vercel's Project Settings →
+   Environment Variables, pointing `NEXT_PUBLIC_API_URL` at wherever the
+   backend is deployed (e.g. Render, Railway, Fly.io — this repo doesn't
+   include hosting for the backend).
+4. Deploy. Every API call happens client-side, so no server-side secrets are
+   needed on Vercel beyond the two `NEXT_PUBLIC_*` values above.
+5. On the backend, make sure `FRONTEND_URL` (used to build magic-login and
+   order-tracking email links) points at this frontend's deployed URL, and
+   that CORS on the backend allows it.
+
+## Project structure
+
+```
+app/
+  layout.js            root shell (html/body/providers)
+  providers.js          Cart + Auth + AdminAuth context providers
+  globals.css           brand tokens & all styling
+  (site)/               storefront route group — has Header/Footer/CartDrawer
+    page.js              home
+    shop/                category browsing
+    product/[id]/        product detail
+    cart/, checkout/      cart & checkout
+    order-confirmation/[id]/
+    track/                order tracking
+    login/, register/, account/
+  admin/                 admin dashboard — its own shell, gated by ADMIN_TOKEN
+    page.js               analytics
+    products/, orders/, coupons/, reviews/, customers/
+components/             shared UI + components/admin/
+context/                CartContext, AuthContext, AdminAuthContext
+lib/                    api.js (backend client), format.js (currency/date/categories)
 ```
 
-Then open `.env` and fill in:
-- `JWT_SECRET` and `ADMIN_TOKEN` — any long random string (the file tells you how to generate one)
-- `FLW_SECRET_KEY` — from your Flutterwave dashboard, under Settings → API Keys. Start with the **test** secret key while you're building.
+## Known limitations / next steps
 
-## 3. Run locally
-
-```bash
-npm start
-```
-
-Then open:
-- `http://localhost:4000/` — the storefront
-- `http://localhost:4000/admin.html` — the admin dashboard (log in with your `ADMIN_TOKEN` from `.env` as the password)
-
-Both pages already call the API on the same origin — nothing else to wire up.
-
-## 4. API endpoints
-
-| Method | Path                          | Auth   | Purpose |
-|--------|-------------------------------|--------|---------|
-| POST   | /api/auth/register            | —      | Create a customer account |
-| POST   | /api/auth/login               | —      | Log in, get a token |
-| POST   | /api/auth/magic-link          | —      | Request a passwordless login link, emailed (or logged) to the given address |
-| POST   | /api/auth/magic-login         | —      | Redeem a magic-link token from the URL, get a token |
-| GET    | /api/auth/me                  | token  | Get the logged-in customer's profile |
-| PUT    | /api/auth/measurements        | token  | Save a customer's tailor's inscription |
-| GET    | /api/products                 | —      | List products (optional `?category=Kaftan`) |
-| POST   | /api/products                 | admin  | Add a product |
-| PUT    | /api/products/:id              | admin  | Edit a product |
-| DELETE | /api/products/:id              | admin  | Remove a product |
-| POST   | /api/orders                   | —      | Place an order |
-| GET    | /api/orders/track?query=...   | —      | Look up an order by ID or phone |
-| GET    | /api/orders                   | admin  | List every order |
-| PATCH  | /api/orders/:id/status         | admin  | Update an order's delivery stage |
-| POST   | /api/payments/verify           | —      | Verify a Flutterwave transaction server-side |
-| GET    | /api/customers                 | admin  | List customer accounts |
-
-"admin" routes expect `Authorization: Bearer <ADMIN_TOKEN>` matching the value in `.env`.
-"token" routes expect `Authorization: Bearer <token>` from `/api/auth/login`.
-
-## 5. Deploying
-
-Any Node host works. Render's free tier is a common starting point:
-
-1. Push this whole `backend/` folder (including `public/`) to a GitHub repo.
-2. On Render: New → Web Service → connect the repo.
-3. Build command: `npm install`. Start command: `npm start`.
-4. Add the environment variables from `.env` in Render's dashboard (never commit your real `.env` file).
-5. Once deployed, Render gives you one URL — that URL *is* your live store. `https://your-app.onrender.com/` is the storefront, `https://your-app.onrender.com/admin.html` is the dashboard.
-
-## 6. Magic link (passwordless) login
-
-Customers can log in with just their email — no password required:
-
-1. On the storefront's login tab, they enter their email under "Email Me A Magic Link."
-2. The server creates a one-time token (valid 15 minutes, single use) and either emails it or, **if no SMTP is configured**, logs the link to the server console and also returns it in the API response as `devMagicUrl` — so you can test the whole flow locally before setting up real email.
-3. Clicking the link opens the storefront at `/?magicToken=...`; the page automatically redeems it, logs the customer in, and strips the token from the address bar.
-4. If it's the customer's first time logging in this way, an account is created automatically from their email — no separate registration step needed.
-
-To send real emails instead of logging the link, fill in `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` (and optionally `SMTP_PORT`, `SMTP_FROM`) in `.env` — any standard SMTP provider works (e.g. Gmail app password, SendGrid, Mailgun, Resend's SMTP relay). Also set `FRONTEND_URL` to your real deployed URL once you have one, so the links point to the right place.
-
-## 7. New product categories: Hijab, Long Gown, Shoes, Handbags
-
-The catalog now includes five additional categories alongside the original menswear line (Kaftan, Jallabiya, Senator Wear, Agbada):
-
-- **Caps** (men's — shown first in the shop filter row)
-- **Hijab**
-- **Long Gown** (abayas / occasion gowns)
-- **Shoes**
-- **Handbags**
-
-Sample products for each were added to `db.js`'s defaults and to the storefront's fallback `PRODUCTS` list in `index.html` (used only if the API can't be reached). Manage the real catalog the same way as before — through `/admin.html` or the `/api/products` endpoints — the new categories work like any other; there's nothing category-specific in the backend logic.
-
-## 8. Growing past this MVP
-
-`db.json` (via lowdb) is a real file on disk — fine for getting started, but:
-- On most hosting platforms, disk storage isn't guaranteed to persist across
-  deploys/restarts. For a production store, move to a real database
-  (Postgres via Supabase/Neon, or MongoDB Atlas both have generous free tiers).
-- Add rate limiting on `/api/auth/login` to slow down password-guessing attempts.
-- Add HTTPS (most hosts provide this automatically) — never send passwords or
-  payment data over plain HTTP.
-- Customer login sessions (the JWT) are currently held only in a JavaScript
-  variable in the browser, so a page refresh logs the customer out. Fine for
-  testing; for a smoother experience later, consider persisting it in an
-  httpOnly cookie set by the server, which is more secure than browser
-  storage.
+- Product images are plain URLs (entered by the admin) — there's no image
+  upload; the backend doesn't expose one either.
+- The Flutterwave widget loads via `<script>` tag (their v3 inline checkout);
+  swap for `flutterwave-react-v3` if you'd rather have a typed React wrapper.
+- No SSR/ISR — every page fetches client-side from the Express API, which
+  keeps the two projects fully decoupled but means no SEO-time product data.
+  If that matters later, product pages are the ones worth converting to
+  server components with `fetch(..., { next: { revalidate: ... } })`.
